@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web OS Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #0b0914; }
+        
+        /* Desktop Area */
+        #desktop {
+            width: 100%;
+            height: calc(100% - 45px);
+            background: linear-gradient(135deg, #1e1e2f, #0f0c1b, #2c1a4d);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            position: relative;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-content: flex-start;
+            flex-wrap: wrap;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Shortcuts */
+        .shortcut {
+            width: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.8);
+        }
+        .shortcut:hover { background: rgba(255,255,255,0.1); }
+        .shortcut .icon { font-size: 40px; margin-bottom: 5px; }
+        .shortcut .label { font-size: 12px; text-align: center; }
+
+        /* Floating Windows Manager */
+        .window {
+            position: absolute;
+            background: rgba(30, 30, 45, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 10;
+            animation: openWin 0.2s ease-out;
+        }
+
+        @keyframes openWin {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .window-header {
+            background: rgba(20, 20, 30, 0.9);
+            padding: 12px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: move;
+            user-select: none;
+            font-size: 14px;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .close-btn {
+            background: #ff5f56;
+            border: none;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .close-btn:hover { transform: scale(1.1); }
+        .window-content { flex: 1; background: transparent; padding: 10px; overflow: hidden; position: relative; }
+        
+        /* App Content Styling */
+        textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; color: #e0e0e0; font-family: monospace; font-size: 14px; }
+        
+        /* Calculator Grid App Layout */
+        .calc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; height: 100%; }
+        .calc-screen { grid-column: span 4; background: #111; color: #00ff00; border: none; padding: 12px; font-size: 20px; text-align: right; border-radius: 6px; font-family: monospace; outline: none; }
+        .calc-btn { background: #3a3a52; border: none; color: white; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .calc-btn:hover { background: #4e4e6e; }
+        .calc-btn.op { background: #6a11cb; }
+        .calc-btn.op:hover { background: #8227e3; }
+
+        /* Snake App Canvas */
+        .snake-canvas { background: #111; display: block; margin: 0 auto; border-radius: 6px; }
+        .snake-score { color: white; font-family: monospace; font-size: 14px; text-align: center; margin-bottom: 5px; }
+
+        /* Taskbar */
+        #taskbar { width: 100%; height: 45px; background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(5px); border-top: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: space-between; padding: 0 15px; color: white; position: fixed; bottom: 0; z-index: 100; }
+        #start-btn { background: linear-gradient(135deg, #6a11cb, #2575fc); border: none; color: white; padding: 6px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        #clock { font-size: 14px; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+    <div id="desktop">
+        <!-- Shortcuts -->
+        <div class="shortcut" onclick="openApp('Notepad', 450, 320)">
+            <div class="icon">📝</div>
+            <div class="label">Notepad</div>
+        </div>
+        <div class="shortcut" onclick="openApp('Calculator', 260, 360)">
+            <div class="icon">🧮</div>
+            <div class="label">Calculator</div>
+        </div>
+        <div class="shortcut" onclick="openApp('Snake Game', 340, 390)">
+            <div class="icon">🐍</div>
+            <div class="label">Snake Game</div>
+        </div>
+
+        <div id="window-container"></div>
+    </div>
+
+    <div id="taskbar">
+        <button id="start-btn">🚀 Apps</button>
+        <div id="clock">12:00:00 PM</div>
+    </div>
+
+    <script>
+        let windowCount = 0;
+
+        function openApp(title, width, height) {
+            windowCount++;
+            const container = document.getElementById('window-container');
+            const win = document.createElement('div');
+            win.className = 'window';
+            win.style.width = width + 'px';
+            win.style.height = height + 'px';
+            win.style.left = (80 + (windowCount * 25) % 200) + 'px';
+            win.style.top = (80 + (windowCount * 25) % 200) + 'px';
+
+            let contentHTML = '';
+            
+            // Choose app setup script
+            if(title === 'Notepad') {
+                contentHTML = `<textarea placeholder="Write notes here..."></textarea>`;
+            } else if(title === 'Calculator') {
+                contentHTML = `
+                    <div class="calc-grid">
+                        <input type="text" class="calc-screen" id="cs-${windowCount}" readonly value="0">
+                        <button class="calc-btn" onclick="calcClear(${windowCount})">C</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'/')">/</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'*')">*</button>
+                        <button class="calc-btn op" onclick="calcEval(${windowCount})">=</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'7')">7</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'8')">8</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'9')">9</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'-')">-</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'4')">4</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'5')">5</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'6')">6</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'+')">+</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'1')">1</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'2')">2</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'3')">3</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'0')" style="grid-column: span 2;">0</button>
+                        <button class="calc-btn" onclick="calcInput(${windowCount},'.')">.</button>
+                    </div>`;
+            } else if(title === 'Snake Game') {
+                contentHTML = `
+                    <div class="snake-score" id="ss-${windowCount}">Score: 0</div>
+                    <canvas class="snake-canvas" id="sc-${windowCount}" width="300" height="300"></canvas>`;
+            }
+
+            win.innerHTML = `
+                <div class="window-header">
+                    <span>${title}</span>
+                    <button class="close-btn" onclick="this.closest('.window').remove()"></button>
+                </div>
+                <div class="window-content">${contentHTML}</div>
+            `;
+
+            container.appendChild(win);
+            makeDraggable(win);
+            
+            win.addEventListener('mousedown', () => {
+                document.querySelectorAll('.window').forEach(w => w.style.zIndex = 10);
+                win.style.zIndex = 20;
+            });
+
+            if(title === 'Snake Game') { startSnake(windowCount); }
+        }
+
+        // Calculator Logic Engine
+        function calcInput(id, val) {
+            let scr = document.getElementById('cs-'+id);
+            if(scr.value === '0' && !isNaN(val)) scr.value = val;
+            else scr.value += val;
+        }
+        function calcClear(id) { document.getElementById('cs-'+id).value = '0'; }
+        function calcEval(id) {
+            let scr = document.getElementById('cs-'+id);
+            try { scr.value = eval(scr.value); } catch(e) { scr.value = 'Error'; }
+        }
+
+        // Snake Game Engine Loop
+        function startSnake(id) {
+            const canvas = document.getElementById('sc-'+id);
